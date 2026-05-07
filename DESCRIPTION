@@ -1,0 +1,27 @@
+Package: phymapr
+Type: Package
+Title: Phylogenetic Transmission Mapping and Animation
+Version: 0.1.0
+Author: Taylor Martins <taylor.martins@azdhs.gov>
+Maintainer: Taylor Martins <taylor.martins@azdhs.gov>
+Description: Generates end-to-end phylogenetic transmission pipelines by combining time-scaled phylogenetic trees with spatial metadata. Provides tools for data preparation, geographic coordinate snapping, ancestral state reconstruction, phylogenetic tree plotting, and generating animated spatial transmission maps.
+License: MIT + file LICENSE
+Encoding: UTF-8
+LazyData: true
+Imports: 
+    ape,
+    dplyr,
+    gganimate,
+    ggplot2,
+    ggspatial,
+    ggtree,
+    gifski,
+    lubridate,
+    maps,
+    phytools,
+    sf,
+    tibble,
+    tidygeocoder,
+    tidyr,
+    treeio,
+    utils
