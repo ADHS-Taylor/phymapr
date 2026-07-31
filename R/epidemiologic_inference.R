@@ -25,6 +25,7 @@
 #' @importFrom tidyr drop_na
 #' @importFrom tibble as_tibble
 #' @importFrom lubridate decimal_date as_date
+#' @importFrom stats setNames median
 #' @export
 run_epidemiologic_inference <- function(
     tree_numeric, 
@@ -160,6 +161,17 @@ run_epidemiologic_inference <- function(
     }
     return(0)
   })
+
+  # Dynamic Auto-Threshold Scaling if SNP distances across tree edges exceed default thresholds
+  if (length(snp_distances[snp_distances > 0]) > 0) {
+    median_snp <- stats::median(snp_distances[snp_distances > 0], na.rm = TRUE)
+    if (!is.na(median_snp) && median_snp > threshold_indirect_snp && threshold_direct_snp == 2 && threshold_indirect_snp == 5) {
+      threshold_direct_snp <- max(2, round(median_snp))
+      threshold_indirect_snp <- max(5, round(median_snp * 1.5))
+      message(sprintf("[phymapr] Auto-scaling SNP confidence thresholds (median branch SNPs = %.1f): direct <= %d, indirect > %d", 
+                      median_snp, threshold_direct_snp, threshold_indirect_snp))
+    }
+  }
 
   # Calculate transition details
   pathways <- data.frame(
