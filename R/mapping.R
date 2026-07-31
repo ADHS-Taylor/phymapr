@@ -111,6 +111,7 @@ interpolate_pulse <- function(x2, y2, t_end, duration = 0.08, n_points = 10, pat
 #' @return A \code{gganimate} object representing the animated transmission map.
 #' @import ggplot2
 #' @import gganimate
+#' @importFrom dplyr group_by filter ungroup
 #' @importFrom maps map_data
 #' @export
 build_map_animation <- function(
@@ -220,16 +221,36 @@ build_map_animation <- function(
       )
   }
 
-  # Inferred Transmission Pathways
+  # Inferred Transmission Pathways (Smooth Curve Body + Single Terminal Arrowhead)
   if (nrow(path_df) > 0) {
     path_df$transmission_type <- factor(
       path_df$transmission_type, 
       levels = c("Direct Pathway (Likely)", "Indirect (Missing Intermediates)", "Distant / Import")
     )
 
+    # A. Draw smooth curve body across interpolated points (NO intermediate arrowheads)
     anim_map <- anim_map +
       ggplot2::geom_path(
         data = path_df, 
+        ggplot2::aes(
+          x = x, y = y, 
+          color = origin_location, 
+          linetype = transmission_type, 
+          alpha = transmission_type, 
+          size = transmission_type,
+          group = pathway_id
+        )
+      )
+
+    # B. Extract ONLY terminal segments (last 2 points per pathway) to render EXACTLY ONE arrowhead at destination
+    end_segments_df <- path_df %>%
+      dplyr::group_by(pathway_id) %>%
+      dplyr::filter(point_index >= (max(point_index) - 1)) %>%
+      dplyr::ungroup()
+
+    anim_map <- anim_map +
+      ggplot2::geom_path(
+        data = end_segments_df, 
         ggplot2::aes(
           x = x, y = y, 
           color = origin_location, 
