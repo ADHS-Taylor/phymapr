@@ -201,15 +201,10 @@ build_map_animation <- function(
       )
   }
 
-  # Local Circulation Episodes (Active Circles)
-  if (nrow(episodes) > 0) {
-    anim_map <- anim_map +
-      ggplot2::geom_point(
-        data = episodes, 
-        ggplot2::aes(x = long, y = lat, color = location, group = episode_id),
-        size = 3.5, shape = 21, fill = "white", stroke = 1.8
-      )
-  }
+  # Local Circulation Episodes (Static markers only — no animated moving node)
+  # Episodes are represented by the static location markers below rather than
+
+  # an animated point that traverses the full timeline.
 
   # Static Background Markers for all locations
   if (nrow(location_lookup) > 0) {
@@ -228,39 +223,84 @@ build_map_animation <- function(
       levels = c("Direct Pathway (Likely)", "Indirect (Missing Intermediates)", "Distant / Import")
     )
 
-    # A. Draw smooth curve body across interpolated points (NO intermediate arrowheads)
-    anim_map <- anim_map +
-      ggplot2::geom_path(
-        data = path_df, 
-        ggplot2::aes(
-          x = x, y = y, 
-          color = origin_location, 
-          linetype = transmission_type, 
-          alpha = transmission_type, 
-          size = transmission_type,
-          group = pathway_id
-        )
-      )
+    # Split into local pathways (viridis-colored by origin) and distant/import (black)
+    local_path_df <- path_df %>% dplyr::filter(transmission_type != "Distant / Import")
+    import_path_df <- path_df %>% dplyr::filter(transmission_type == "Distant / Import")
 
-    # B. Extract ONLY terminal segments (last 2 points per pathway) to render EXACTLY ONE arrowhead at destination
-    end_segments_df <- path_df %>%
+    # A. Draw LOCAL pathway curve bodies (colored by origin location)
+    if (nrow(local_path_df) > 0) {
+      anim_map <- anim_map +
+        ggplot2::geom_path(
+          data = local_path_df, 
+          ggplot2::aes(
+            x = x, y = y, 
+            color = origin_location, 
+            linetype = transmission_type, 
+            alpha = transmission_type, 
+            size = transmission_type,
+            group = pathway_id
+          )
+        )
+    }
+
+    # B. Draw DISTANT / IMPORT pathway curve bodies in BLACK (fixed color, not mapped)
+    if (nrow(import_path_df) > 0) {
+      anim_map <- anim_map +
+        ggplot2::geom_path(
+          data = import_path_df, 
+          ggplot2::aes(
+            x = x, y = y, 
+            linetype = transmission_type, 
+            alpha = transmission_type, 
+            size = transmission_type,
+            group = pathway_id
+          ),
+          color = "black"
+        )
+    }
+
+    # C. Extract ONLY terminal segments (last 2 points per pathway) to render EXACTLY ONE arrowhead at destination
+    local_end_df <- local_path_df %>%
       dplyr::group_by(pathway_id) %>%
       dplyr::filter(point_index >= (max(point_index) - 1)) %>%
       dplyr::ungroup()
 
-    anim_map <- anim_map +
-      ggplot2::geom_path(
-        data = end_segments_df, 
-        ggplot2::aes(
-          x = x, y = y, 
-          color = origin_location, 
-          linetype = transmission_type, 
-          alpha = transmission_type, 
-          size = transmission_type,
-          group = pathway_id
-        ),
-        arrow = ggplot2::arrow(length = ggplot2::unit(0.18, "cm"), type = "closed")
-      )
+    import_end_df <- import_path_df %>%
+      dplyr::group_by(pathway_id) %>%
+      dplyr::filter(point_index >= (max(point_index) - 1)) %>%
+      dplyr::ungroup()
+
+    if (nrow(local_end_df) > 0) {
+      anim_map <- anim_map +
+        ggplot2::geom_path(
+          data = local_end_df, 
+          ggplot2::aes(
+            x = x, y = y, 
+            color = origin_location, 
+            linetype = transmission_type, 
+            alpha = transmission_type, 
+            size = transmission_type,
+            group = pathway_id
+          ),
+          arrow = ggplot2::arrow(length = ggplot2::unit(0.18, "cm"), type = "closed")
+        )
+    }
+
+    if (nrow(import_end_df) > 0) {
+      anim_map <- anim_map +
+        ggplot2::geom_path(
+          data = import_end_df, 
+          ggplot2::aes(
+            x = x, y = y, 
+            linetype = transmission_type, 
+            alpha = transmission_type, 
+            size = transmission_type,
+            group = pathway_id
+          ),
+          color = "black",
+          arrow = ggplot2::arrow(length = ggplot2::unit(0.18, "cm"), type = "closed")
+        )
+    }
   }
 
   # Import Pulses
@@ -311,29 +351,29 @@ build_map_animation <- function(
     ggplot2::scale_linetype_manual(
       values = c(
         "Direct Pathway (Likely)" = "solid", 
-        "Indirect (Missing Intermediates)" = "dashed", 
-        "Distant / Import" = "dotted"
+        "Indirect (Missing Intermediates)" = "longdash", 
+        "Distant / Import" = "dotdash"
       ),
       drop = FALSE
     ) +
     ggplot2::scale_alpha_manual(
       values = c(
         "Direct Pathway (Likely)" = 0.95, 
-        "Indirect (Missing Intermediates)" = 0.60, 
-        "Distant / Import" = 0.35
+        "Indirect (Missing Intermediates)" = 0.75, 
+        "Distant / Import" = 0.80
       ),
       drop = FALSE
     ) +
     ggplot2::scale_size_manual(
       values = c(
-        "Direct Pathway (Likely)" = 1.4, 
-        "Indirect (Missing Intermediates)" = 1.0, 
-        "Distant / Import" = 0.6
+        "Direct Pathway (Likely)" = 1.6, 
+        "Indirect (Missing Intermediates)" = 1.2, 
+        "Distant / Import" = 1.0
       ),
       drop = FALSE
     ) +
     ggplot2::labs(
-      subtitle = "Time: {frame_along}", 
+      subtitle = "Date: {format(lubridate::date_decimal(frame_along), '%b %d, %Y')}", 
       color = "Source Location",
       linetype = "Pathway Type",
       alpha = "Pathway Type",
@@ -354,4 +394,218 @@ build_map_animation <- function(
     )
 
   return(anim_map)
+}
+
+
+#' Build Static Cumulative Transmission Map
+#'
+#' Creates a static (non-animated) version of the transmission map showing ALL
+#' pathways and episodes simultaneously. This gives a complete overview of
+#' transmission activity that is much easier to read than a GIF.
+#'
+#' @param episodes Data frame of residence episodes.
+#' @param pathways Data frame of transition pathways.
+#' @param location_lookup Lookup table of distinct locations with lat/long.
+#' @param map_bounds Named numeric vector of spatial bounds (xmin, xmax, ymin, ymax).
+#' @param map_style Map aesthetic style: "polygon" or "tile". Default "polygon".
+#' @param distant_rendering_style How distant/import transitions are rendered. Default "import_arrow".
+#'
+#' @return A \code{ggplot} object (static, not animated).
+#' @import ggplot2
+#' @importFrom dplyr group_by filter ungroup mutate n
+#' @importFrom maps map_data
+#' @export
+build_static_map <- function(
+    episodes, 
+    pathways, 
+    location_lookup, 
+    map_bounds, 
+    map_style = "polygon",
+    distant_rendering_style = "import_arrow"
+) {
+  message("[phymapr] Building static cumulative map...")
+
+  # 1. Build path data for ALL pathways (same logic as animated version)
+  path_list <- list()
+
+  if (nrow(pathways) > 0) {
+    for (i in seq_len(nrow(pathways))) {
+      x1   <- pathways$startLon[i]
+      y1   <- pathways$startLat[i]
+      x2   <- pathways$endLon[i]
+      y2   <- pathways$endLat[i]
+      type <- pathways$transmission_type[i]
+      orig <- pathways$origin_location[i]
+
+      if (type == "Distant / Import") {
+        if (distant_rendering_style == "hide") next
+        if (distant_rendering_style == "import_arrow") {
+          arrow_df <- interpolate_arrow(x2, y2, 0, 1, offset = 1.2, pathway_id = i)
+          arrow_df$transmission_type <- type
+          arrow_df$origin_location <- "External Import"
+          path_list[[length(path_list) + 1]] <- arrow_df
+        } else {
+          bezier_df <- interpolate_bezier(x1, y1, x2, y2, 0, 1, curvature = 0.2, pathway_id = i)
+          bezier_df$transmission_type <- type
+          bezier_df$origin_location <- orig
+          path_list[[length(path_list) + 1]] <- bezier_df
+        }
+      } else {
+        bezier_df <- interpolate_bezier(x1, y1, x2, y2, 0, 1, curvature = 0.2, pathway_id = i)
+        bezier_df$transmission_type <- type
+        bezier_df$origin_location <- orig
+        path_list[[length(path_list) + 1]] <- bezier_df
+      }
+    }
+  }
+
+  path_df <- if (length(path_list) > 0) do.call(rbind, path_list) else data.frame()
+
+  # 2. Build static ggplot
+  static_map <- ggplot2::ggplot()
+
+  # Base map
+  if (map_style == "polygon") {
+    world_map <- ggplot2::map_data("world")
+    us_states <- ggplot2::map_data("state")
+
+    static_map <- static_map +
+      ggplot2::geom_polygon(
+        data = world_map, 
+        ggplot2::aes(x = long, y = lat, group = group), 
+        fill = "gray96", color = "gray85", linewidth = 0.2
+      ) +
+      ggplot2::geom_path(
+        data = us_states, 
+        ggplot2::aes(x = long, y = lat, group = group), 
+        color = "white", linewidth = 0.3
+      )
+  }
+
+  # Location markers (sized by number of episodes)
+  if (nrow(location_lookup) > 0 && nrow(episodes) > 0) {
+    loc_counts <- episodes %>%
+      dplyr::group_by(location) %>%
+      dplyr::summarise(n_episodes = dplyr::n(), .groups = "drop") %>%
+      dplyr::left_join(location_lookup, by = "location")
+
+    static_map <- static_map +
+      ggplot2::geom_point(
+        data = loc_counts, 
+        ggplot2::aes(x = long, y = lat, size = n_episodes), 
+        color = "black", fill = "gray60", shape = 21, alpha = 0.7
+      ) +
+      ggplot2::scale_size_continuous(range = c(2, 8), name = "Episodes")
+  }
+
+  # All pathways
+  if (nrow(path_df) > 0) {
+    path_df$transmission_type <- factor(
+      path_df$transmission_type, 
+      levels = c("Direct Pathway (Likely)", "Indirect (Missing Intermediates)", "Distant / Import")
+    )
+
+    # Split into local and import
+    local_path_df <- path_df %>% dplyr::filter(transmission_type != "Distant / Import")
+    import_path_df <- path_df %>% dplyr::filter(transmission_type == "Distant / Import")
+
+    if (nrow(local_path_df) > 0) {
+      static_map <- static_map +
+        ggplot2::geom_path(
+          data = local_path_df, 
+          ggplot2::aes(
+            x = x, y = y, 
+            color = origin_location, 
+            linetype = transmission_type,
+            group = pathway_id
+          ),
+          linewidth = 0.9, alpha = 0.7
+        )
+
+      # Arrowheads for local
+      local_end_df <- local_path_df %>%
+        dplyr::group_by(pathway_id) %>%
+        dplyr::filter(point_index >= (max(point_index) - 1)) %>%
+        dplyr::ungroup()
+
+      static_map <- static_map +
+        ggplot2::geom_path(
+          data = local_end_df, 
+          ggplot2::aes(
+            x = x, y = y, 
+            color = origin_location, 
+            linetype = transmission_type,
+            group = pathway_id
+          ),
+          linewidth = 0.9, alpha = 0.7,
+          arrow = ggplot2::arrow(length = ggplot2::unit(0.15, "cm"), type = "closed")
+        )
+    }
+
+    if (nrow(import_path_df) > 0) {
+      static_map <- static_map +
+        ggplot2::geom_path(
+          data = import_path_df, 
+          ggplot2::aes(
+            x = x, y = y, 
+            linetype = transmission_type,
+            group = pathway_id
+          ),
+          color = "black", linewidth = 0.8, alpha = 0.7
+        )
+
+      import_end_df <- import_path_df %>%
+        dplyr::group_by(pathway_id) %>%
+        dplyr::filter(point_index >= (max(point_index) - 1)) %>%
+        dplyr::ungroup()
+
+      static_map <- static_map +
+        ggplot2::geom_path(
+          data = import_end_df, 
+          ggplot2::aes(x = x, y = y, linetype = transmission_type, group = pathway_id),
+          color = "black", linewidth = 0.8, alpha = 0.7,
+          arrow = ggplot2::arrow(length = ggplot2::unit(0.15, "cm"), type = "closed")
+        )
+    }
+  }
+
+  # Coordinates, scales, theme
+  static_map <- static_map +
+    ggplot2::coord_fixed(
+      xlim = c(map_bounds["xmin"], map_bounds["xmax"]), 
+      ylim = c(map_bounds["ymin"], map_bounds["ymax"]), 
+      ratio = 1.3
+    ) +
+    ggplot2::scale_color_viridis_d(option = "turbo", na.value = "gray50") +
+    ggplot2::scale_linetype_manual(
+      values = c(
+        "Direct Pathway (Likely)" = "solid", 
+        "Indirect (Missing Intermediates)" = "longdash", 
+        "Distant / Import" = "dotdash"
+      ),
+      drop = FALSE
+    ) +
+    ggplot2::labs(
+      title = "Cumulative Transmission Map",
+      subtitle = paste0(nrow(pathways), " pathways across ", 
+                        nrow(location_lookup), " locations"),
+      color = "Source Location",
+      linetype = "Pathway Type"
+    ) +
+    ggplot2::theme_minimal() +
+    ggplot2::theme(
+      panel.background = ggplot2::element_rect(fill = "aliceblue"),
+      legend.position = "bottom",
+      legend.text = ggplot2::element_text(size = 8),
+      legend.title = ggplot2::element_text(size = 9, face = "bold"),
+      legend.box = "vertical",
+      legend.margin = ggplot2::margin(0, 0, 0, 0)
+    ) +
+    ggplot2::guides(
+      color = ggplot2::guide_legend(nrow = 2, byrow = TRUE, title.position = "top"),
+      linetype = ggplot2::guide_legend(nrow = 1, title.position = "top"),
+      size = ggplot2::guide_legend(nrow = 1, title.position = "top")
+    )
+
+  return(static_map)
 }

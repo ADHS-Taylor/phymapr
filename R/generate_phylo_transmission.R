@@ -87,10 +87,43 @@ generate_phylo_transmission <- function(
   episodes_final <- paced_res$episodes %>%
     dplyr::mutate(reveal_time = reveal_start)
 
+  # Apply n_prune_early: remove the N earliest-starting pathways from the
+  # animation. These typically represent deep evolutionary history (MRCA nodes)
+  # that clutter the map with long-distance arcs from years before sample collection.
+  if (n_prune_early > 0 && nrow(paced_res$pathways) > 0) {
+    n_remove <- min(n_prune_early, nrow(paced_res$pathways) - 1)
+    if (n_remove > 0) {
+      sorted_starts <- sort(paced_res$pathways$reveal_start)
+      cutoff_val <- sorted_starts[n_remove + 1]
+      pathways_filtered <- paced_res$pathways %>%
+        dplyr::filter(reveal_start >= cutoff_val)
+      episodes_filtered <- episodes_final %>%
+        dplyr::filter(reveal_time >= cutoff_val)
+      message("[phymapr] Pruned ", n_remove, " earliest pathways (cutoff date: ", 
+              round(cutoff_val, 2), ")")
+    } else {
+      pathways_filtered <- paced_res$pathways
+      episodes_filtered <- episodes_final
+    }
+  } else {
+    pathways_filtered <- paced_res$pathways
+    episodes_filtered <- episodes_final
+  }
+
   # Step 6: Build map animation using paced results and map_bounds
   anim_map <- build_map_animation(
-    episodes                = episodes_final,
-    pathways                = paced_res$pathways,
+    episodes                = episodes_filtered,
+    pathways                = pathways_filtered,
+    location_lookup         = inference_res$location_lookup,
+    map_bounds              = data_objs$map_bounds,
+    map_style               = map_style,
+    distant_rendering_style = distant_rendering_style
+  )
+
+  # Step 7: Build static cumulative map (all pathways at once)
+  static_map <- build_static_map(
+    episodes                = episodes_filtered,
+    pathways                = pathways_filtered,
     location_lookup         = inference_res$location_lookup,
     map_bounds              = data_objs$map_bounds,
     map_style               = map_style,
@@ -102,6 +135,7 @@ generate_phylo_transmission <- function(
   return(list(
     tree_plot     = p_tree,
     map_animation = anim_map,
+    static_map    = static_map,
     episodes      = paced_res$episodes,
     pathways      = paced_res$pathways
   ))

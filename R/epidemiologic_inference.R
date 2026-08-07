@@ -25,7 +25,7 @@
 #' @importFrom tidyr drop_na
 #' @importFrom tibble as_tibble
 #' @importFrom lubridate decimal_date as_date
-#' @importFrom stats setNames median
+#' @importFrom stats setNames median dist
 #' @export
 run_epidemiologic_inference <- function(
     tree_numeric, 
@@ -173,6 +173,25 @@ run_epidemiologic_inference <- function(
     }
   }
 
+  # Identify tip vs internal nodes — tips have reliable locations from metadata,
+
+  # internal nodes have ASR-reconstructed locations that may be unreliable
+  n_tips <- length(phy$tip.label)
+  is_tip_node <- seq_len(num_nodes) <= n_tips
+
+  # Calculate a snapping distance threshold for internal nodes.
+  # Internal nodes with snap distance above this threshold have unreliable
+
+  # location assignments (BM ASR placed them far from any real sample site).
+  # Use the median pairwise distance between known locations as a reference.
+  if (nrow(location_lookup) >= 2) {
+    loc_dists <- as.numeric(stats::dist(location_lookup[, c("lat", "long")]))
+    snap_threshold <- stats::median(loc_dists) * 0.4
+  } else {
+    snap_threshold <- 2.0
+  }
+  message(sprintf("[phymapr] Internal node snap threshold: %.2f degrees (internal nodes snapped further are treated as unreliable).", snap_threshold))
+
   # Calculate transition details
   pathways <- data.frame(
     parent_node          = edges[, 1],
@@ -186,11 +205,23 @@ run_epidemiologic_inference <- function(
     origin_location      = node_location[edges[, 1]],
     destination_location = node_location[edges[, 2]],
     snp_distance         = snp_distances,
-    snapping_distance    = node_snap_dist[edges[, 1]] + node_snap_dist[edges[, 2]]
+    snapping_distance    = node_snap_dist[edges[, 1]] + node_snap_dist[edges[, 2]],
+    parent_snap_dist     = node_snap_dist[edges[, 1]],
+    child_snap_dist      = node_snap_dist[edges[, 2]],
+    parent_is_tip        = is_tip_node[edges[, 1]],
+    child_is_tip         = is_tip_node[edges[, 2]]
   ) %>%
     tidyr::drop_na(origin_location, destination_location) %>%
     # Filter for transitions between different locations
     dplyr::filter(origin_location != destination_location) %>%
+    # Remove transitions involving internal nodes with unreliable snap locations.
+    # An internal node with high snap distance was placed by BM ASR far from any
+    # real sample — its "location" is a phantom jump artifact, not a real transition.
+    dplyr::filter(
+      (parent_is_tip | parent_snap_dist <= snap_threshold) &
+      (child_is_tip  | child_snap_dist  <= snap_threshold)
+    ) %>%
+    dplyr::select(-parent_snap_dist, -child_snap_dist, -parent_is_tip, -child_is_tip) %>%
     dplyr::mutate(time_elapsed = endYear - startYear)
 
   # Calculate Surveillance Density in metadata
