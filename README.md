@@ -111,7 +111,7 @@ SNP thresholds auto-scale to the data when branches span different evolutionary 
 
 ## Full Pipeline (FASTA to Map)
 
-If you're starting from raw sequences rather than a pre-built timetree, the companion repo handles the bioinformatics side:
+If you're starting from an aligned FASTA rather than a pre-built timetree, the companion repo handles the bioinformatics side:
 
 **[phymap-workflow](https://github.com/ADHS-Taylor/phymap-workflow)** -- one command from aligned FASTA + metadata to final map. Uses IQ-TREE for ML tree, TreeTime for molecular clock, then phymapr for visualization. No conda or Snakemake required.
 
