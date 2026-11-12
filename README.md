@@ -130,3 +130,10 @@ R/
 ├── epidemiologic_inference.R      # episode collapsing, pathway scoring
 └── mapping.R                      # arc interpolation, map building
 ```
+
+## License
+
+Released under the MIT License -- see [`LICENSE.md`](LICENSE.md).
+Copyright (c) 2026 Taylor Martins. You are free to use, modify, and
+redistribute this software, provided the copyright notice and license text are
+retained (i.e. please credit the author).
